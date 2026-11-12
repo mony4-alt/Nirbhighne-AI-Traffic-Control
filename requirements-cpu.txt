@@ -1,0 +1,6 @@
+# CPU Torch fallback selected by setup_environment.py for CPU-only, Intel,
+# and AMD PCs. Intel OpenVINO or Windows DirectML can still accelerate the
+# exported model independently of this PyTorch fallback.
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.7.1
+torchvision==0.22.1

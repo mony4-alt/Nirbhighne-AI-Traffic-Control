@@ -1,0 +1,37 @@
+# NIRBHIGHNE — AI Traffic Signal Control System Requirements
+# Works on Windows, Linux, and macOS. Supports CPU, NVIDIA CUDA, Intel iGPU
+# (OpenVINO), and Windows DirectML.
+
+# PyTorch is hardware-specific and is installed first by setup_environment.py.
+# Run that script on a new PC instead of installing this file directly. It
+# selects the official CUDA 12.6 wheels when nvidia-smi finds an NVIDIA GPU,
+# otherwise it selects the official CPU wheels. Keeping those choices out of
+# this common file prevents an iGPU-only PC from downloading a 2.7 GB CUDA
+# wheel and prevents an NVIDIA PC from silently receiving CPU Torch.
+
+# Core Machine Learning & Computer Vision
+ultralytics>=8.0.0
+opencv-python>=4.8.0
+numpy>=1.23.0
+pillow>=9.5.0
+pi-heif>=0.19.0
+
+# Intel iGPU Acceleration (OpenVINO)
+openvino>=2023.0.0; sys_platform == 'win32' or sys_platform == 'linux'
+
+# AMD & Intel iGPU Acceleration on Windows (DirectML)
+onnxruntime-directml>=1.15.0; sys_platform == 'win32'
+onnx>=1.14.0
+
+# User Interface & Graphics
+customtkinter>=5.2.0
+tkinterdnd2>=0.3.0
+darkdetect>=0.8.0
+matplotlib>=3.7.0
+
+# Tracking, Video Stream & Build Tools
+lap>=0.4.0
+yt-dlp>=2024.1.0
+PyYAML>=6.0
+sympy>=1.12
+pyinstaller>=6.0.0

@@ -1,0 +1,56 @@
+
+# Python environments and caches
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Packaged application artefacts
+build/
+dist/
+*.spec.bak
+
+# Runtime-generated files
+output/
+logs/*
+!logs/.gitkeep
+evaluation_results/
+evaluation_data/
+runs/
+
+# Generated robustness evaluation data
+robustness_eval/results/
+robustness_eval/temp/
+robustness_eval/runs/
+
+# Large ML artefacts and downloaded media
+*.pt
+*.pth
+*.onnx
+*.engine
+*.xml
+*.bin
+*.cache
+*.mp4
+*.avi
+*.mkv
+*.webm
+weights/
+
+# Local datasets and utility files
+data.yml & utility file/
+
+# Temporary experiments
+scratch/
+
+# Team notebooks
+members code/
+
+# Private credentials
+.env
+.env.*
+!.env.example
+kaggle.json
+*.pem
+*.key

@@ -1,0 +1,1374 @@
+NIRBHIGHNE / VEHICLE DETECTOR -- PROJECT GUIDE
+================================================
+
+Purpose
+-------
+This Windows desktop application analyses prerecorded traffic video and local
+live camera feeds.  It finds vehicles, keeps a per-feed running count using
+tracking IDs, highlights ambulances, and produces a traffic-signal
+recommendation.  It is a
+decision-support prototype: it does NOT connect to or operate a real traffic
+signal.
+
+The one-sentence explanation for a presentation
+------------------------------------------------
+"We use a custom-trained YOLOv8m object-detection model to detect 11 local
+traffic-vehicle classes in video frames, use YOLO tracking IDs to avoid
+counting the same vehicle repeatedly, and turn the live counts and ambulance
+presence into an explainable lane-priority recommendation."
+
+WHAT IS IN THE PROJECT
+----------------------
+main.py
+  Application entry point. Shows the splash screen and opens the main window.
+
+gui.py
+  The CustomTkinter desktop interface: video/source selection, Start/Pause/
+  Stop, device selection, live counters, evaluation controls, YouTube flow,
+  and polling of events from the detector thread.
+
+detector.py
+  The real-time engine. Opens videos, runs YOLO inference and tracking, draws
+  overlays, counts IDs, makes output videos, and sends new frames/stats to GUI.
+
+traffic_logic.py
+  Pure decision logic: supported feed counts, proportional green-time
+  calculation, ambulance horizontal-direction estimation, and signal advice.
+
+emergency_overlay.py
+  Reusable GUI widgets for the emergency banner and per-lane signal timer.
+
+evaluator.py + evaluation_dataset.py
+  Validation pipeline. It prepares a portable validation-only copy of a
+  dataset (including HEIC-to-JPEG conversion), calls Ultralytics validation,
+  then exports metrics and plots.
+
+youtube.py
+  yt-dlp download worker with progress and cancellation support.
+
+config.py / theme.py / utils.py
+  Central settings and folders, visual design tokens, and logging/hardware
+  helper functions.
+
+robustness_eval/
+  Separate experiment suite. It prepares grayscale and 75%-resolution dataset
+  variants, trains/evaluates models, and compares the results. It is research
+  tooling, not part of the normal desktop detection path.
+
+weights/merged_v8m_from_s.pt
+  The preferred trained model used by the application. `weights/best.pt`,
+  `weights/final_best_v8m.pt`, and a root-level `final_best_v8m.pt` are fallback
+  candidates, selected by `config.MODEL_PATH` in that order.
+
+
+TOP-LEVEL FOLDER AND FILE MAP
+-----------------------------
+The project root intentionally contains source code, runtime content, generated
+reports, research material, and packaging artefacts. They have different jobs;
+not every root item belongs in a transfer or EXE bundle.
+
+Application source files
+  main.py
+    Starts the process, shows the splash screen, and creates the GUI.
+  gui.py
+    Owns the desktop layout, source/lane controls, camera controls, display,
+    statistics, evaluation dialog, and GUI-thread polling.
+  detector.py
+    Reads feeds, selects the runtime device/profile, runs YOLO tracking, draws
+    boxes, counts tracks, writes optional video output, and publishes results.
+  traffic_logic.py
+    Small testable rules for lane counts, green-time advice, emergency priority,
+    and signal-state hysteresis. It does not access the GUI or a real signal.
+  emergency_overlay.py
+    Reusable emergency banner and lane signal-timer widgets.
+  evaluator.py / evaluation_dataset.py
+    Standard validation, metric/plot export, and creation of a portable
+    validation-only dataset copy.
+  youtube.py
+    Background yt-dlp downloader with progress and cancellation handling.
+  config.py
+    Model candidates, hardware profiles, thresholds, folders, output settings,
+    camera capture defaults, and evaluation constants.
+  theme.py / utils.py
+    UI design tokens plus logging, hardware information, and shared helpers.
+  setup_environment.py
+    Detects NVIDIA/CPU/iGPU capabilities and installs the matching Torch pair
+    before installing hardware-independent requirements.
+
+Runtime content and generated folders
+  weights/
+    Trained model checkpoints plus exported ONNX/OpenVINO runtime artefacts.
+    The preferred merged v8m checkpoint is selected first; compatible fallbacks
+    are documented above.
+  assets/ and icons/
+    UI images and icon files used by the Python app and copied by the EXE build.
+  output/
+    Optional annotated MP4 files produced by detection. These are user output,
+    not input data required to run the application.
+  logs/
+    Runtime history, detector diagnostics, and hardware-selection logs.
+  evaluation_results/
+    Generated standard-validation metrics, per-class tables, and plots. Existing
+    results are evidence from a run, not code dependencies.
+  evaluation_data/
+    Portable validation-only data prepared for offline evaluation. It may be
+    created by the build script and is much smaller than the training dataset.
+
+Training, research, and development folders
+  `data.yml & utility file/`
+    Dataset manifests, source validation material, and dataset utilities used
+    by training/evaluation. The full training data is intentionally not a normal
+    runtime dependency.
+  runs/
+    Training/export experiment artefacts such as results and checkpoints.
+  robustness_eval/
+    Separate grayscale/low-resolution robustness experiments; not the live
+    detector path.
+  scratch/
+    One-off model comparison and diagnostic scripts; useful during research but
+    not imported by the application.
+  tests/
+    Regression tests, especially for the pure traffic rules and dataset helper.
+  `Final_capstone_code.ipynb` and `merge_models.py`
+    Notebook/research entry points for experiments and checkpoint merging.
+  `members code/`
+    Team-member notebooks and their test material. It documents collaboration
+    history but is not imported by the desktop application.
+
+Packaging and local-machine folders/files
+  build_exe.bat
+    Windows build orchestrator; its phases are explained below.
+  VehicleDetector.spec
+    PyInstaller recipe describing hidden imports, data, binaries, exclusions,
+    executable name, and the collected-folder layout.
+  build/
+    PyInstaller's temporary analysis/build artefacts. Safe to regenerate; not
+    needed on the target PC.
+  dist/
+    The deliverable output. Distribute the complete `dist/Nirbhighne/` folder.
+  venv/
+    This PC's Python environment. Never copy it as a portable environment;
+    recreate it and run `setup_environment.py` on another source-code PC.
+  requirements.txt, requirements-cpu.txt, requirements-cuda.txt
+    Common packages plus mutually exclusive CPU and NVIDIA Torch installations.
+  README.md, `project guide.md`, PROJECT_GUIDE.txt, MODEL_CARD.md
+    User quick-start, short guide, detailed implementation guide, and model
+    provenance/evaluation record.
+  `.gitignore`
+    Version-control rules that keep caches, local environments, generated
+    outputs, downloaded media, and large local weights out of source tracking.
+  `__pycache__/`
+    Python bytecode cache. It is disposable and should not be shipped.
+  `final_best_v8m.pt`
+    Root-level legacy model location retained as a documented fallback for
+    existing copies; new builds should use a file under `weights/`.
+  `sample.mp4` and the long-named Dhaka traffic MP4
+    Demonstration input videos for local testing. They are not required by the
+    application and are intentionally not copied by the EXE script.
+
+
+ALGORITHM AND MODEL ARCHITECTURE
+--------------------------------
+Model type
+  The installed weights report task=detect and use a YOLOv8m-style Detection
+  Model (depth_multiple=0.67, width_multiple=0.75), configured for 11 classes.
+  "m" means medium: a practical accuracy/speed compromise, larger than nano or
+  small but lighter than large or extra-large models.
+
+YOLO in plain language
+  YOLO (You Only Look Once) examines an image in one neural-network pass and
+  returns, for each likely object: a bounding box, a class, and a confidence.
+  The application accepts normal detections at the selected confidence level
+  (default 0.30). Ambulance is the deliberate exception: it always requires a
+  fixed high 0.60 score, regardless of the live sensitivity slider. The slider
+  still adjusts normal vehicle classes from 15% to 85% on the fly.
+
+Architecture inside the model
+  1. Backbone: convolution and C2f blocks extract increasingly high-level
+     image features. SPPF expands the context seen by the network.
+  2. Neck: upsampling and concatenation combine fine image detail with deep
+     semantic features at multiple scales.
+  3. Detect head: produces class probabilities and boxes at three scales, so
+     it can handle near/large and distant/small vehicles.
+
+Classes in the trained model
+  Ambulance, Auto_ricksaw, Bike, Bus, Fire_truck, Leguna, Pickup, Police_car,
+  Private_car, Truck, and cng.
+  config.py maps these names to display labels (for example, Bike becomes
+  Motorcycle in the UI). The mapping is presentation logic; model class IDs
+  remain the labels above.
+
+Tracking and unique counting
+  detector.py calls model.track(..., persist=True). Ultralytics associates a
+  track ID with an object across frames. The app stores seen IDs in a
+  dictionary and reports the number of unique IDs as "total detected". For
+  multiple video feeds, each ID receives a lane-based offset to avoid a track
+  ID from feed 1 colliding with the same number in feed 2.
+
+Important limitation: tracking IDs are not a guarantee of a real-world total.
+An ID may change after occlusion, leaving the image, or an ID-switching error;
+that can create over- or under-counting. Counts should therefore be described
+as model-estimated unique tracks, not audited vehicle totals.
+
+
+RUNTIME PIPELINE
+----------------
+  Video file(s) / downloaded YouTube video
+       -> OpenCV VideoCapture reads a frame from every selected feed
+       -> optional grayscale conversion
+       -> YOLOv8m batched model.track inference on the frame list
+       -> confidence filtering and class-label mapping
+       -> bounding-box drawing + tracking-ID accumulation
+       -> ambulance confirmation/direction + signal recommendation
+       -> annotated frame(s), live stats, and optional MP4 writer
+       -> GUI polls and displays the newest frame/statistics
+
+The detector uses a background worker thread. The GUI stays responsive because
+it does not run inference itself. A lock protects the latest display frame;
+the GUI intentionally displays only the newest frame rather than building up a
+large backlog.
+
+DETECTION PIPELINE -- THE MOST IMPORTANT TECHNICAL SECTION
+-----------------------------------------------------------
+This is the complete path from a camera/video frame to a box, count, and
+traffic recommendation. It is useful for both debugging and a viva answer.
+
+1. Source acquisition
+  `gui.py` validates the selected source and passes one path or camera index per
+  selected feed to `VehicleDetector.start()`. `detector.py` opens each source
+  with OpenCV `VideoCapture`. Files use sequential reads. Windows live cameras
+  prefer DirectShow, request MJPG, 1280x720, 30 FPS, and a small capture buffer
+  when the driver accepts those requests. These are requests, not guarantees.
+
+  Multi-feed capture uses one reusable reader pool with one task per feed. A
+  one-feed run reads directly without scheduling a pool task because there is
+  nothing to parallelise. For live sources, `_read_frame()` grabs a small
+  number of newest frames before retrieving one, preventing a slow inference
+  loop from displaying seconds-old camera frames.
+
+2. Optional input preparation
+  Normal detection keeps the original colour frame. The optional grayscale
+  conversion belongs to the separate robustness experiment. The model
+  internally resizes its input according to the hardware profile, while the
+  original frame remains available for drawing, display, and saved output.
+
+3. Model preprocessing
+  Ultralytics converts the OpenCV BGR image into the expected tensor format,
+  scales pixel values, and letterboxes it to the configured `imgsz` while
+  preserving aspect ratio. Letterboxing avoids stretching a car or bus into a
+  different shape. The model sees a predictable inference canvas, then boxes
+  are mapped back onto the original frame.
+
+4. YOLO forward pass
+  The custom checkpoint performs one-stage object detection. In one forward pass
+  it predicts candidate boxes, objectness/class confidence, and class scores at
+  multiple feature-map scales. The three scales help with large nearby and
+  smaller distant vehicles, but an extremely small object can still disappear
+  after resizing.
+
+5. Non-maximum suppression and confidence
+  Ultralytics removes overlapping duplicate boxes with IoU-based non-maximum
+  suppression. `DEFAULT_IOU=0.45` is passed to `model.track()`.
+
+  The confidence slider is shared by recorded video, YouTube downloads, and
+  live cameras for normal vehicle classes. Ambulance is the one intentional
+  exception. There are two related thresholds:
+    * The inference candidate threshold is the lower of the selected normal
+      slider confidence and `AMBULANCE_CONFIDENCE`. This keeps normal low-score
+      candidates available when the slider is low, while the final ambulance
+      filter still requires the fixed high score.
+    * `_passes_confidence()` applies the final threshold to each result. Normal
+      classes use the selected confidence. Ambulance always uses its fixed
+      emergency threshold, so a low normal setting cannot create a weak alert.
+
+  The defaults are normal 0.30, ambulance 0.60, and `MAX_DETECTIONS=300` per
+  processed image. Lower normal confidence improves recall but increases false
+  positives and tracker work; it cannot recover an object the model never
+  proposed.
+
+6. Tracking
+  `model.track(..., persist=True)` sends detections through the Ultralytics
+  tracker. It matches current boxes with recent observations and assigns IDs.
+  The detector stores IDs in `unique_tracks` rather than adding one on every
+  frame.
+
+  This creates two different values:
+    * Current count: accepted vehicle boxes visible in the current processed
+      frame/feed.
+    * Total detected: unique tracker IDs seen during the run.
+  Total detected is an estimate, not a physical census. Occlusion, ID switches,
+  re-entry, and missed frames can cause undercounting or overcounting. Each feed
+  receives a large lane offset before IDs are stored, so equal tracker IDs from
+  different feeds cannot collide.
+
+7. Per-lane result processing
+  `_process_lane_result()` reads boxes, class IDs, confidence values, and
+  tracker IDs. It maps trained names to display labels, draws the thick coloured
+  box and label, updates lane class counts, and records accepted IDs. Box
+  thickness affects visibility only, not model accuracy.
+
+8. Ambulance confirmation and direction
+  Ambulance is handled as a high-priority class. A single weak box does not
+  immediately change signal advice. The detector keeps a short confidence
+  history, requires three processed-frame confirmations, allows the configured
+  one-frame grace period, and then marks the lane as an emergency route.
+  Horizontal centroid movement gives only a screen-space left/right hint; it is
+  not real-world road direction, speed, or route prediction.
+
+9. Traffic decision logic
+  `traffic_logic.py` is deterministic and independent of the GUI:
+    * Green duration is proportional to density and clamped to 8--60 seconds.
+    * Empty/equal lanes receive the 20-second base duration.
+    * The busiest lane is recommended GREEN; ties choose the lowest lane number.
+    * A confirmed ambulance overrides normal priority and marks other lanes
+      YIELD.
+    * Normal changes use `SIGNAL_HOLD_MIN_FRAMES=8` so similar counts do not
+      make advice flicker. Emergency priority bypasses that hold.
+  This is a rule-based decision-support layer, not a learned traffic controller.
+  It is explainable and testable, but not safety-certified signal control.
+
+10. Rendering, output, and GUI hand-off
+  The detector draws lane badges, signal HUDs, and emergency overlays. If saving
+  is enabled, a copy is sent to a per-lane writer thread so encoding does not
+  normally block inference. Frames are composed into a preview, converted once
+  from BGR to RGB, and published as the newest frame under a lock.
+
+  The GUI `_poll()` consumes coalesced statistic events and `_redraw()` paints
+  the newest frame. Old frames are replaceable: showing every old frame would
+  increase latency when inference is slower than the source. This is why the
+  preview can remain current even when processing FPS is below source FPS.
+
+
+WHY YOLOV8M, TRACKING, AND RULES WERE USED
+------------------------------------------
+Traditional colour thresholds, contours, and background subtraction are fragile
+on traffic scenes because lighting, shadows, camera vibration, overlapping
+vehicles, and moving backgrounds break their assumptions. A two-stage detector
+such as Faster R-CNN can be accurate but usually costs more latency. YOLO makes
+one-stage predictions in one pass, which fits a live traffic visualisation.
+
+The medium model has more capacity for local vehicle classes and small or
+partially occluded objects than v8n/v8s, while remaining more practical on a
+desktop than large/extra-large models. The trade-off is real: v8m needs more
+compute and memory, so the code changes internal input size and batches safely
+on weaker hardware.
+
+`weights/merged_v8m_from_s.pt` keeps the v8m architecture and contains
+compatible tensors transferred from the local v8s checkpoint. Because v8s and
+v8m have different tensor shapes, this is not equivalent to retraining v8m on
+the v8s data. Full v8m fine-tuning or knowledge distillation is the strongest
+future model improvement.
+
+Tracking prevents one car from becoming dozens of counted vehicles across
+consecutive frames. The deterministic signal layer is separate because a
+reviewer can inspect and unit-test it. Real signal control would additionally
+need calibrated geometry, legal rules, redundant sensors, fail-safe hardware,
+field validation, and authority approval.
+
+
+MULTI-FEED / "LANE" DESIGN -- IMPORTANT FOR DEMONSTRATION
+---------------------------------------------------------
+The current implementation treats 1, 2, or 4 lanes as 1, 2, or 4 *separate
+video feeds*. It reads one video per lane, runs batched inference over those
+feeds, and makes a grid view. It does not currently divide one camera image
+into vertical geometric lane zones.
+
+For a correct demo, say: "Each selected lane is represented by its own video
+feed; the feeds are processed together where the selected hardware allows,
+otherwise they are safely chunked." Do not claim lane polygons or
+camera-calibrated road lanes are implemented in the current code.
+
+Traffic recommendation logic
+  * Each feed's current accepted vehicle detections becomes its lane count.
+  * Green duration is proportional to that count and clamped to 8--60 seconds.
+    If no vehicles are detected, every lane gets the default 20 seconds.
+  * If an ambulance is confirmed in a lane for three processed frames, that lane
+    receives emergency priority and the other lanes are marked YIELD.
+  * Otherwise the feed with the highest count is suggested as GREEN. Ties go
+    to the lowest-numbered lane.
+  * Ambulance direction is inferred only from horizontal centroid movement in
+    recent frames. It is a screen-direction hint (left/right), not real road
+    direction or a navigation prediction.
+
+Planning rationale behind the code
+  * A YOLO medium model was chosen to balance vehicle accuracy with usable
+    desktop speed.
+  * Hardware-aware inference sizes balance far/small-object detail against
+    speed: single-feed CUDA can use 960--1280px, while multi-feed and CPU/iGPU
+    paths use smaller fixed profiles.
+  * NVIDIA CUDA is preferred, followed by Intel OpenVINO, Windows DirectML,
+    and CPU fallback for portability.
+  * Threading separates expensive tasks (model load, inference, output writing,
+    and downloads) from the interface.
+  * The evaluation module packages only validation data so that the desktop EXE
+    can validate without carrying the much larger training dataset.
+
+
+CONFIGURATION REFERENCE -- WHAT EACH IMPORTANT SETTING DOES
+------------------------------------------------------------
+`config.py` is the central tuning surface. Keeping these choices in one file
+avoids scattered magic numbers and makes experiments repeatable. Change one
+group at a time and record FPS, inference time, and evaluation metrics.
+
+Paths and model selection
+  `BASE_DIR` points to the source folder or the PyInstaller executable folder.
+  `WEIGHTS_DIR`, `OUTPUT_DIR`, `LOGS_DIR`, `ASSETS_DIR`, `ICONS_DIR`, and
+  `EVAL_RESULTS_DIR` are built from it, so the app does not depend on the
+  current working directory.
+  `MODEL_PATH` chooses the first existing candidate:
+    1. `weights/merged_v8m_from_s.pt`
+    2. `weights/best.pt`
+    3. `weights/final_best_v8m.pt`
+    4. root-level `final_best_v8m.pt`
+  The checkpoint must expose the same 11 class IDs expected by the project.
+
+Detection quality controls
+  `DEFAULT_CONFIDENCE=0.30` is the normal score threshold. Lower values
+  generally improve recall and increase false positives; higher values do the
+  opposite. `AMBULANCE_CONFIDENCE=0.60` is a fixed high emergency threshold
+  and is not controlled by the normal slider. `DEFAULT_IOU=0.45` controls
+  overlap suppression and is not the same thing as confidence.
+  `MAX_DETECTIONS=300` is a safety cap per image.
+  `VEHICLE_CLASSES` changes display names only; it does not change class IDs.
+  Grayscale mode is for the robustness experiment and can remove useful colour
+  information from a colour-trained model.
+
+Inference size and CUDA memory controls
+  `INFERENCE_IMGSZ=1280` is the high-detail default for a sufficiently large
+  CUDA card in single-feed mode. Cards below `GPU_SMALL_VRAM_GB=6.0` use
+  960px for one feed and 640px for multiple feeds. Cards below
+  `GPU_TINY_VRAM_GB=3.5`, or with less than 0.75 GiB currently free, use one
+  image per call. A 4 GB GTX 1650 therefore uses two 640px images in a
+  multi-feed CUDA call when memory allows. Larger cards can use up to four
+  960px multi-feed images. These settings protect stability; they do not alter
+  the source or saved-video resolution.
+
+CPU and iGPU controls
+  `CPU_AUTO_PROFILE=True` selects from logical cores and physical RAM:
+    * low: at most 4 logical cores or below 8 GiB RAM; 2 Torch threads,
+      640px single-feed and 512px multi-feed;
+    * balanced: 4 Torch threads, 768px single-feed and 640px multi-feed;
+    * high: at least 12 logical cores and 16 GiB RAM; 6 Torch threads,
+      960px single-feed and 768px multi-feed.
+  CPU/OpenCV thread limits avoid oversubscription, where several libraries each
+  create workers and become slower. Intel OpenVINO and DirectML use fixed 640px
+  graphs and safe one-image chunks, with CPU fallback if provider loading fails.
+
+Capture, latency, and display controls
+  `LIVE_CAMERA_WIDTH`, `LIVE_CAMERA_HEIGHT`, and `LIVE_CAMERA_FPS` are camera
+  requests. `LIVE_CAMERA_BUFFER_DRAIN=2` discards a small stale backlog for
+  lower live latency. `FRAME_SKIP_INTERVAL=1` processes every source frame;
+  increasing it can raise throughput but lowers temporal coverage and can harm
+  tracking/counting. `CPU_ADAPTIVE_FPS_TARGET=0` keeps adaptive skipping off.
+  A positive target enables CPU-only skipping up to `CPU_MAX_FRAME_SKIP=4`.
+  `GUI_RENDER_FPS_CAP=30` limits Tk redraw work, not model or saved-video FPS.
+  The `CPU_*_DISPLAY_MAX_*` values cap only a composed multi-feed preview.
+
+Overlay, output, emergency, and traffic controls
+  `DETECTION_BOX_THICKNESS=5` and ambulance overlay settings affect visibility,
+  not detections. `OUTPUT_WRITER_QUEUE_SIZE=32` buffers disk writes, although a
+  very slow disk can still bottleneck Save Output. Ambulance confirmation,
+  confidence history, EMA alpha, grace frames, and direction history trade
+  reaction speed against false alarms. Signal green time is clamped by
+  `MIN_SIGNAL_GREEN_SEC=8`, `MAX_SIGNAL_GREEN_SEC=60`, and
+  `SIGNAL_BASE_GREEN_SEC=20`; `SIGNAL_HOLD_MIN_FRAMES=8` prevents normal
+  priority flicker. Congestion thresholds control UI labels only.
+
+Evaluation controls are separate from live settings. `EVAL_BATCH_SIZE=4`,
+`EVAL_USE_HALF=False`, and evaluator `imgsz=640` favour reliable validation on
+older 4 GB cards. They should not be used to claim live-detection FPS.
+
+
+HOW TO DIAGNOSE MISSED VEHICLES
+--------------------------------
+Missed vehicles are not automatically a GTX/CPU problem. Check:
+  1. Device, model filename, input size, FPS, and inference time. A CPU
+     fallback or very small input can explain throughput and small-object loss.
+  2. Confidence slider. Lower it gradually from 0.60 to 0.40 or 0.30 and watch
+     normal vehicle recall versus false positives. Ambulance remains fixed at
+     0.60 and is not lowered with the slider. No threshold can recover an object
+     the model never proposed.
+  3. Scene conditions: distance, occlusion, blur, glare, darkness, compression,
+     and unusual viewpoints.
+  4. Standard per-class evaluation. Overall mAP can hide weak classes; improve
+     labels and representative samples rather than only increasing FPS.
+  5. Temporal coverage. Frame skipping, stale camera frames, and tracker ID
+     changes can lose brief observations.
+  6. Dataset domain. A class cannot be learned reliably from missing,
+     inconsistent, or visually unrelated training examples.
+
+Precision means "of boxes predicted, how many are correct?" Recall means "of
+real labelled objects, how many were found?" A missed vehicle is primarily a
+recall failure; a false vehicle is primarily a precision failure. Confidence
+changes the operating point, while data and retraining change detector ability.
+
+
+VIVA-READY IMPORTANT PROGRAM SECTIONS
+--------------------------------------
+  `main.py`: entry point; starts the splash screen and GUI. It stays small so
+  startup orchestration is not mixed with model logic.
+  `gui.py`: presentation/controller layer; validates inputs, starts workers,
+  polls events on Tk's main thread, and renders frames/statistics. Inference is
+  never run directly in a button callback because that would freeze the window.
+  `detector.py`: real-time engine. The most important methods are `load_model()`
+  for provider selection/warm-up, `_inference_imgsz()` and
+  `_inference_batch_size()` for scheduling, `_read_frame()` for latency,
+  `_process_lane_result()` for filtering/tracking/overlays, and
+  `_run_inference_loop()` for the complete worker pipeline.
+  `traffic_logic.py`: pure rules and direction tracker, isolated so they can be
+  unit-tested without a camera or GPU.
+  `evaluator.py`/`evaluation_dataset.py`: measurement layer; prepares portable
+  labels/images, calls `model.val()`, extracts metrics, and saves plots.
+  `setup_environment.py`: portability layer; detects NVIDIA, selects CPU/CUDA
+  Torch, and installs common packages. iGPU acceleration is selected later by
+  OpenVINO/DirectML.
+  `youtube.py`: network input worker; keeps download work off the GUI thread,
+  prefers <=720p streams, and uses FFmpeg when separate streams need merging.
+  `config.py`: reproducibility/policy layer for model, thresholds, profiles,
+  capture, signals, output, and evaluation.
+  `build_exe.bat`/`VehicleDetector.spec`: delivery layer; verifies, packages,
+  copies runtime content, and declares dynamic imports/DLL/data requirements.
+
+
+VIVA QUESTIONS AND ANSWERS
+--------------------------
+Q: What problem does the project solve?
+  A: It turns one to four traffic video feeds into vehicle detections, estimated
+  counts, emergency-vehicle alerts, and explainable lane-priority advice. It is
+  a visual decision-support prototype, not an automatic physical signal.
+
+Q: What is the difference between detection and tracking here?
+  A: Detection identifies boxes/classes independently in a frame. Tracking
+  associates boxes across frames with IDs. Detection supplies the observations;
+  tracking prevents the same vehicle from being counted once per frame.
+
+Q: Why can the application not detect every vehicle?
+  A: The model has finite learned capability and the image has finite detail.
+  Small, hidden, blurred, dark, unusual, or badly labelled examples can be
+  missed. Hardware can add frame drops or force a smaller internal input, but
+  the remedy may be better data/retraining rather than only a faster GPU.
+
+Q: What does confidence mean?
+  A: It is the model's score for a predicted class/box. The slider changes the
+  operating point: lower values favour recall, higher values favour precision.
+  It is not a probability guarantee and cannot create a missing prediction.
+
+Q: What is IoU and why is it different from confidence?
+  A: IoU is the overlap ratio between two boxes. Confidence asks how likely a
+  prediction is; IoU-based suppression decides whether overlapping predictions
+  are duplicates. Both affect final displayed boxes but represent different
+  concepts.
+
+Q: Why is YOLOv8m suitable for this project?
+  A: It is a one-stage detector with more capacity than tiny/small models for
+  local vehicle classes and distant objects, while remaining practical on
+  desktop hardware. The application compensates for its cost with profiles,
+  safe batching, FP16 on CUDA, and background processing.
+
+Q: Why not use only the NVIDIA GPU?
+  A: Team members may have CPU-only, Intel iGPU, AMD GPU, or NVIDIA systems.
+  `setup_environment.py` installs the correct CPU/CUDA Torch pair, and the live
+  detector prefers CUDA, Intel OpenVINO, DirectML, then CPU. This preserves a
+  usable fallback instead of making the project hardware-specific.
+
+Q: Why are 2/4 lanes separate feeds?
+  A: The current design represents each traffic approach with its own source.
+  It does not claim to split one wide camera image into calibrated geometric
+  lane polygons. This keeps source assignment explicit and allows independent
+  feeds to be processed together where memory permits.
+
+Q: Why use threads?
+  A: Model inference, camera/video reads, output encoding, YouTube downloading,
+  model loading, and evaluation can take time. Moving them away from Tk's main
+  thread keeps the interface responsive. Locks protect the newest frame and
+  queues safely transfer events/statistics.
+
+Q: How does the application stay responsive when inference is slow?
+  A: The GUI never waits for inference. The worker publishes only the newest
+  frame, coalesces statistic notifications, and the live reader drains stale
+  frames. This reduces latency, although it means some old preview frames may
+  be skipped.
+
+Q: How is green time calculated?
+  A: The rule layer uses current accepted vehicle counts, gives more time to the
+  busiest feed, clamps the result to configured safe demo bounds, and applies
+  an eight-frame hold to normal changes. A confirmed ambulance overrides normal
+  priority. The rules are transparent and unit-tested.
+
+Q: How was the model evaluated?
+  A: The evaluator uses a labelled validation split and Ultralytics `model.val()`
+  to calculate precision, recall, mAP@0.50, mAP@0.50:0.95, F1, per-class
+  metrics, confusion matrices, and PR plots. Live counts and FPS are not model
+  accuracy metrics.
+
+Q: What are the present evaluation results?
+  A: The latest recorded standard run is precision 0.6188, recall 0.7057,
+  mAP@0.50 0.6490, mAP@0.50:0.95 0.4551, and F1 0.6594. These values apply only
+  to the recorded checkpoint and validation manifest; changing either requires
+  a new evaluation.
+
+Q: Is the system production-safe?
+  A: No. It is a capstone demonstration. Real deployment requires calibrated
+  lanes, reliable multi-camera synchronisation, redundant sensing, fail-safe
+  controllers, legal review, security, extensive field testing, and authority
+  approval. The application never directly operates a signal.
+
+Q: What would be the strongest future improvement?
+  A: Store complete training provenance, add diverse labelled traffic data,
+  fine-tune a genuine v8m checkpoint or distil a stronger teacher into a faster
+  model, add calibrated road zones and a proper multi-object tracker evaluation,
+  then benchmark accuracy/latency on representative hardware.
+
+
+SAFE PERFORMANCE OPTIMISATIONS CURRENTLY IN THE CODE
+-----------------------------------------------------
+The code reduces overhead without lowering confidence, changing weights, or
+enabling frame skipping:
+  * CUDA uses cuDNN benchmarking, FP16 inference, and TF32 flags where supported.
+  * CUDA batch size is bounded by total and free VRAM to avoid out-of-memory
+    failures.
+  * CPU/OpenCV thread counts are profiled instead of blindly using every core.
+  * OpenVINO and DirectML cache fixed-shape exported graphs and fall back safely.
+  * Multi-feed reading remains parallel; single-feed reading avoids an
+    unnecessary thread-pool task per frame.
+  * Single-feed model calls pass the ndarray directly instead of a one-item list.
+  * The GUI receives the immutable newest RGB frame by reference instead of
+    copying a full-resolution array at every redraw.
+  * Coalesced statistics, capped redraws, stale-frame draining, and writer
+    threads prevent avoidable queue, GUI, and disk delays.
+
+No accuracy-affecting default was reduced in this pass: input profiles remain
+hardware-aware, every frame is processed by default, the shared confidence
+filter is unchanged, and saved frames retain source resolution. The largest
+remaining speed/accuracy lever is inference size; change it only as a measured
+hardware profile because smaller sizes can lose small vehicles.
+
+Measure both model inference time and end-to-end FPS. Decode, colour conversion,
+output encoding, or GUI redraw can be the bottleneck even when the model call
+is fast. Use the same model, source, lane count, confidence, input size, save
+setting, and provider when comparing machines.
+
+
+GITIGNORE AUDIT AND SOURCE CONTROL POLICY
+------------------------------------------
+`.gitignore` excludes virtual environments, bytecode, PyInstaller `build/` and
+`dist/`, runtime output/logs/evaluation data, large weights and exported model
+files (`*.pt`, `*.pth`, `*.onnx`, `*.engine`, `*.xml`, `*.bin`), videos, dataset
+image folders, and generated scratch checks. It keeps Python source, tests,
+documentation, requirements, manifests, labels, assets, and icons available.
+
+This is intentional: Git stores the reproducible code and metadata, while model
+weights, videos, and datasets are transferred through a release bundle or
+external storage. Ignore rules do not remove a file already tracked by Git; a
+previously committed large file requires an intentional `git rm --cached` if it
+should leave the index while remaining on disk.
+
+
+EVALUATION AND EXPERIMENTS
+--------------------------
+Standard evaluation
+  The GUI uses evaluator.run_standard_evaluation(). It validates the active
+  `config.MODEL_PATH` with
+  Ultralytics model.val() and exports precision, recall, mAP@0.50,
+  mAP@0.50:0.95, F1 score, per-class metrics, confusion matrix, PR curve and
+  other plots into evaluation_results/.
+
+Metric meanings
+  Precision: of the detections made, how many were correct?
+  Recall: of real labelled objects, how many were found?
+  mAP@0.50: average detection precision when a predicted box overlaps a true
+    box by at least 50% IoU.
+  mAP@0.50:0.95: stricter average over IoU thresholds from .50 to .95.
+  F1: balanced summary of precision and recall.
+
+Robustness suite
+  robustness_eval/ can create grayscale and 75%-resolution versions of a
+  dataset, retrain/evaluate the model variants, then compare metrics. A saved
+  grayscale result is present, but it must not be presented as the main model's
+  result: it reports P=0.4917, R=0.6129, mAP50=0.5548, mAP50-95=0.3888 and
+  F1=0.5457 for that grayscale experiment only.
+
+
+REVIEW FINDINGS AND IMPROVEMENT PRIORITIES
+------------------------------------------
+This section records the original review items and their current status. Items
+marked applied are already in the source; the remaining items are future
+improvements, not requirements for the present demo.
+
+HIGH PRIORITY
+1. Correct the README multi-lane description. APPLIED.
+   README.md now describes separate video feeds and the current per-lane source
+   controls. Geometric lane polygons are still future work.
+
+2. Do not use recommendations to operate physical traffic signals.
+   Current lane counts are per-frame detections, and ambulance handling uses a
+   low confidence threshold plus a three-frame confirmation. It is suitable
+   for a visual prototype, not safety-certified real-world control. State this
+   explicitly in all presentations.
+
+3. Preserve output videos instead of overwriting them. APPLIED.
+   detector.py includes a timestamp/run ID in processed output filenames.
+
+4. Make the model/data provenance reproducible.
+   Keep a model card with training dataset version, split counts, annotation
+   rules, training command/hyperparameters, date, and standard evaluation
+   results. The current project contains the weights and dataset labels, but a
+   complete training record is not documented.
+
+MEDIUM PRIORITY
+5. Reuse the frame-reading thread pool. APPLIED.
+   detector.py creates one ThreadPoolExecutor per run, not per processed frame.
+
+6. Fix progress when frame skipping is enabled. APPLIED.
+   Progress uses the raw frame counter, so skipping inference frames does not
+   make a completed video stop at an incorrect percentage.
+
+7. Either implement or remove unused settings. APPLIED.
+   CPU adaptive skipping is available when its target is enabled, and
+   `SIGNAL_HOLD_MIN_FRAMES` is applied to normal signal changes. Emergency
+   priority still bypasses the normal hold.
+
+8. Clarify lane naming in the UI/report.
+   The code calls each independent video feed a lane. Rename user-facing text
+   to "camera feed" where appropriate, or document the assumption that one
+   camera is assigned to one approach/lane.
+
+9. Add automated tests around pure logic and path handling. PARTLY APPLIED.
+   The repository includes tests for traffic logic and portable validation
+   dataset preparation. Full GUI and hardware-provider tests remain manual
+   because they require Windows display/camera/GPU environments.
+
+LOW PRIORITY / CODE QUALITY
+10. Split the very large detector.py and gui.py files gradually by responsibility
+    (capture/output, overlay rendering, detector state; widgets, controls,
+    event handling). This is a maintainability improvement only and need not
+    change the visible app design.
+
+11. Pin a fully tested dependency set. FUTURE.
+    The common requirements intentionally use compatible minimum versions;
+    the hardware-specific Torch files pin the tested CPU/CUDA pair. A complete
+    lock file would improve reproducibility further.
+
+12. Add .gitignore if this project will use Git. APPLIED.
+    `.gitignore` excludes venv/, caches, build/dist, generated outputs, logs,
+    model weights, and downloaded videos while keeping source and manifests.
+
+13. Report per-class standard evaluation metrics in the final report. APPLIED
+    IN PROJECT ARTIFACTS.
+    `evaluation_results/metrics.json` and `metrics.txt` contain per-class
+    results, while the plots include the confusion matrix and PR diagnostics.
+
+
+HOW TO EXPLAIN IT TO A TEAM
+---------------------------
+Suggested 90-second walkthrough
+  1. "Our input is one to four prerecorded video streams representing traffic
+     approaches. OpenCV reads frames and the GUI stays responsive because the
+     work happens on a background thread."
+  2. "Each frame goes to our custom 11-class YOLOv8m model. YOLO returns boxes,
+     class labels, and confidence scores. The application selects an
+     appropriate internal input size for the available CPU, iGPU, or NVIDIA
+     GPU, while keeping the displayed frame at source resolution."
+  3. "YOLO tracking provides IDs across frames. We collect IDs instead of
+     adding every box from every frame, so the running total approximates
+     unique vehicles."
+  4. "We sum the active vehicles in each feed. The busiest feed gets a longer
+     suggested green duration. A confirmed ambulance overrides normal priority
+     and produces an emergency/yield recommendation."
+  5. "Finally, the app renders boxes and metrics live, optionally saves an
+     annotated video, and separately offers a proper labelled-dataset
+     evaluation with mAP, precision, recall, F1, and diagnostic plots."
+
+Questions to be ready for
+  Q: Does it control a real signal? A: No. It is a visual recommendation
+     prototype; real deployment needs calibrated cameras, sensors, fail-safe
+     hardware, traffic authority approval, and extensive validation.
+  Q: Why YOLOv8m? A: It is a medium model that balances accuracy and speed for
+     desktop traffic video. GPU inference improves its real-time behavior.
+  Q: Is total count exact? A: No. It is based on tracker IDs and can be affected
+     by occlusion or ID changes; evaluation and field testing quantify errors.
+  Q: What improves it most? A: Better labelled data for rare classes and camera
+     conditions, calibrated road/lane zones, longer temporal confirmation, and
+     measured end-to-end tests on representative intersections.
+
+QUICK OPERATING CHECKLIST
+-------------------------
+1. Create/activate the supported Python environment and run
+   `python setup_environment.py` so the correct CPU or CUDA Torch runtime is
+   installed for that computer.
+2. Ensure one model candidate exists, preferably
+   `weights/merged_v8m_from_s.pt`.
+3. Run: python main.py
+4. Select 1, 2 or 4 video feeds; ensure every required feed has a source.
+5. Verify the selected device (CUDA if available; CPU otherwise).
+6. Start detection, observe live overlays/counters, then stop cleanly.
+7. For measured claims, run standard evaluation on a held-out labelled dataset
+   and use the generated metrics/plots in the report.
+
+This guide reflects the source code and model inspected on 2026-08-27.
+
+
+FROM SOURCE CODE TO WINDOWS APPLICATION
+---------------------------------------
+There are two supported ways to deliver the project.
+
+Source-code workflow
+  1. Copy the project folder, including source files, model weights, and the
+     required evaluation manifest.
+  2. Install Python 3.11 or newer and create a virtual environment:
+       python -m venv venv
+       venv\\Scripts\\activate
+  3. Run `python setup_environment.py`. It checks the computer, installs the
+     CUDA Torch/torchvision pair for NVIDIA systems, or the CPU pair for
+     CPU/iGPU systems, then installs the common packages.
+  4. Run `python main.py`. This starts the splash window, then creates the
+     CustomTkinter application. The splash progress is visual feedback only;
+     model loading occurs in AppGUI's background ModelLoader thread.
+  5. On startup, `config.MODEL_PATH` selects the preferred model. The detector
+     verifies the available provider and falls back safely if a requested
+     provider cannot load.
+
+Standalone EXE workflow
+  1. Run `build_exe.bat` from the project root on a machine with the prepared
+     build environment. The script checks Python and dependencies, cleans only
+     the previous `build/` and `dist/Nirbhighne/` build outputs, and invokes
+     `VehicleDetector.spec` through PyInstaller.
+  2. The spec analyzes `main.py` and follows its imports. It explicitly bundles
+     CustomTkinter/Tkinter, Ultralytics, Torch's dynamic modules, OpenCV,
+     Matplotlib, YouTube support, OpenVINO, ONNX Runtime, DirectML support,
+     and Tcl/Tk files needed by the GUI.
+  3. The build script copies icons, model weights, runtime folders, and a
+     validation-only dataset into `dist/Nirbhighne/`. The full training set,
+     downloaded videos, logs, and generated evaluation results are not bundled
+     unless copied separately.
+  4. Distribute the complete `dist/Nirbhighne/` folder, not only the EXE.
+     The target PC does not need Python. CUDA still requires a compatible
+     NVIDIA driver; OpenVINO/DirectML require their supported GPU/runtime and
+     otherwise the application falls back to CPU.
+
+How `build_exe.bat` works, phase by phase
+  The batch file is a repeatable build coordinator. It does not train the model
+  and it does not convert the Python app into a single magic file by itself;
+  PyInstaller performs the packaging using `VehicleDetector.spec`.
+
+  * Header: `@echo off`, UTF-8 code-page setup, title, and screen clearing keep
+    the Windows console readable. `set "PYTHON=venv\\Scripts\\python.exe"`
+    forces the build to use this project's virtual environment instead of an
+    unrelated system Python. The initial existence check stops early if that
+    environment has not been created.
+  * Step 1/6: runs `%PYTHON% --version` and stops on a missing or unusable
+    interpreter.
+  * Step 2/6: imports PyInstaller. If it is absent, the script installs
+    `pyinstaller>=6.0.0` into the project environment and stops if installation
+    fails.
+  * Step 3/6: imports the runtime packages needed by the application, including
+    Torch/torchvision, Ultralytics, OpenCV, CustomTkinter, drag-and-drop,
+    yt-dlp, image support, OpenVINO, ONNX Runtime, and ONNX. If any import is
+    missing, it runs `setup_environment.py`, which selects the CPU or NVIDIA
+    Torch requirements for that build PC and installs the common packages.
+  * Step 4/6: removes only the generated `build/` folder and the previous
+    `dist\\Nirbhighne\\` folder. It leaves source files, model weights, data,
+    logs, and evaluation results untouched.
+  * Step 5/6: runs `python -m PyInstaller VehicleDetector.spec --noconfirm`.
+    The spec follows `main.py` imports and explicitly collects dynamic packages,
+    Tk/Tcl files, OpenCV/Matplotlib, hardware backends, model/runtime modules,
+    and UI assets. `console=False` keeps the delivered app windowed.
+  * Step 6/6: creates runtime subfolders, copies icons and every available
+    documented model candidate, and calls `evaluation_dataset.py` to copy only
+    the portable validation split (converting HEIC/HEIF when required). It does
+    not copy the full training dataset, downloaded videos, or existing logs.
+  * Finish/failure labels: every important command checks `%errorlevel%`. A
+    failure prints a clear message and skips the distribution instructions;
+    successful output reports the exact folder and EXE path. `pause` leaves the
+    result visible in a double-clicked Command Prompt window.
+
+  The result is a folder because Torch, OpenCV, Tcl/Tk, and hardware/runtime
+  libraries are large and contain DLLs/data files. Always zip or copy the whole
+  `dist\\Nirbhighne\\` directory. On another PC, the EXE uses the packaged
+  runtime, but NVIDIA CUDA still depends on a compatible installed driver.
+
+What happens after the user clicks Start
+  The GUI validates the selected source files, copies the display options into
+  the detector, and disables conflicting controls. `VehicleDetector.start()`
+  resets tracker/statistics state and launches `InferenceWorker`. The worker
+  reads all feeds, performs hardware-aware YOLO tracking, applies the shared
+  confidence threshold, updates the traffic logic, and publishes only the
+  newest frame plus lightweight statistics. The GUI's `_poll()` callback reads
+  those messages on the Tk main thread and updates the screen. This separation
+  is why inference, disk writing, and downloads do not directly manipulate
+  Tkinter widgets.
+
+Updating the application
+  Change source files and run the Python workflow for development. After a
+  source change intended for teachers or other PCs, run `build_exe.bat` again
+  and replace the entire `dist/Nirbhighne/` folder. If only the model changes,
+  place the new preferred model in `dist/Nirbhighne/weights/` and verify its
+  classes and evaluation metrics before presenting results.
+
+
+DETAILED CODE LOGIC AND CONNECTION MAP
+======================================
+
+1. Application startup -- exact call chain
+------------------------------------------
+  main.py: main()
+    -> creates SplashScreen
+    -> SplashScreen._tick() advances a visual-only progress bar using Tkinter
+       after() callbacks; it does not actually load the model
+    -> creates AppGUI
+    -> AppGUI.__init__()
+       -> creates one VehicleDetector instance
+       -> creates all interface widgets
+       -> calls _check_model() in the background
+       -> begins _poll() every 20 milliseconds
+
+  AppGUI._check_model()
+    -> starts the ModelLoader background thread
+    -> ModelLoader calls VehicleDetector.load_model(device)
+    -> config.MODEL_PATH selects the preferred merged v8m weights, with safe
+       fallbacks if that file is absent
+    -> load_model chooses NVIDIA CUDA, Intel OpenVINO, Windows DirectML, or
+       CPU, moves/exports the model as required, and performs a warm-up call
+    -> AppGUI receives the completion callback through self.after(0, ...), then
+       enables detection controls and displays the selected device.
+
+Why this matters: Tkinter/CustomTkinter must update widgets only from its main
+thread. Loading a neural network can take seconds, so moving it to the
+ModelLoader prevents a frozen window. self.after(0, callback) safely returns
+work to the GUI thread.
+
+
+2. Detection flow -- exact call chain
+-------------------------------------
+When the user clicks Start:
+
+  AppGUI.start_detection()
+    -> checks model_loaded
+    -> obtains lane count (1, 2 or 4) and one existing video path per feed
+    -> copies the grayscale checkbox value into detector.grayscale_mode
+    -> disables inputs that should not change while processing
+    -> calls VehicleDetector.start(ordered_paths, save_output)
+
+  VehicleDetector.start()
+    -> refuses a second run if a worker is already alive
+    -> resets DetectionStats, old tracked IDs, ambulance streaks, latest frame
+       and event-pending state
+    -> creates one daemon thread named InferenceWorker
+    -> InferenceWorker runs _run_inference_loop(...)
+
+  VehicleDetector._run_inference_loop()
+    -> opens cv2.VideoCapture for every selected feed
+    -> optionally creates one cv2.VideoWriter + writer thread per output feed
+    -> repeats until Stop is requested or the shortest feed ends:
+       A. waits while paused
+       B. reads one frame from every feed in parallel
+       C. optionally converts each BGR frame to 3-channel grayscale
+       D. calls self.model.track(source=frames, persist=True, ...); CUDA
+          batches according to available VRAM and fixed-shape iGPU backends
+          are safely chunked
+       E. handles every YOLO result using _process_lane_result()
+       F. calculates ambulance state and traffic recommendation
+       G. draws boxes, lane badges, signal HUDs and emergency overlays
+       H. writes copies of frames to output queues when saving is enabled
+       I. makes a 1/2/4-feed grid, converts BGR -> RGB, and publishes it
+       J. fills DetectionStats and sends a lightweight stats_update event
+    -> releases cameras, drains output writers, then sends Finished.
+
+  AppGUI._poll() [runs every 20 ms]
+    -> reads state_change / stats_update / error messages from detector.event_queue
+    -> _apply_stats() puts statistics into labels, emergency banner and timers
+    -> _redraw() fetches only a newer frame, scales it, and paints the canvas
+
+Text flowchart
+--------------
+  User presses Start
+        |
+        v
+  AppGUI.start_detection
+        |
+        v
+  VehicleDetector.start -- resets run state -- starts InferenceWorker
+        |
+        v
+  [repeat for video frames]
+  Read frames in parallel -> batch into model.track -> parse boxes/IDs
+        |                                          |
+        |                                          v
+        |                                    current counts
+        |                                          |
+        v                                          v
+  writer queues <- draw overlay <- ambulance + signal logic
+        |                                          |
+        v                                          v
+  optional processed MP4                 DetectionStats + event queue
+                                                   |
+                                                   v
+                                          AppGUI._poll / _apply_stats / _redraw
+                                                   |
+                                                   v
+                                           live video, counts and advice
+
+
+3. The most important class: VehicleDetector
+---------------------------------------------
+VehicleDetector is the application's core controller. It owns both ML state
+and run state. Learn this class first when reading the project.
+
+Important field                    Meaning
+----------------                  -------------------------------------------
+model                              Loaded Ultralytics YOLO/OpenVINO/ONNX object
+device                             "cuda", "intel:gpu", "directml", or "cpu"
+stats                              Latest DetectionStats object for the GUI
+_worker_thread                     The one inference thread for a run
+_stop_event                        Thread-safe signal to end the loop
+_pause_event                       Set=continue, cleared=pause
+_frame_lock                        Protects the latest RGB display frame
+_latest_frame / _frame_sequence    Latest frame only; avoids GUI backlog
+event_queue                        Worker-to-GUI messages
+_ambulance_lane_streaks            Consecutive ambulance frames per feed
+_dir_tracker                       AmbulanceDirectionTracker object
+
+Important method                   Job / reason to know it
+----------------                  -------------------------------------------
+load_model()                       Model/device setup + CUDA-to-CPU fallback
+start()                            Resets one run and starts InferenceWorker
+stop(), pause(), resume()          Public controls used by gui.py
+_run_inference_loop()              Main orchestration loop; most important
+_process_lane_result()             Converts YOLO rows into counts, IDs, boxes
+_compose_grid()                    Turns 1/2/4 independent frames into view
+_queue_stats_update()              Prevents too many queued UI stat events
+get_latest_frame_if_new()          Lets UI ignore unchanged frames efficiently
+
+What model.track returns
+  A result corresponds to each input frame. result.boxes.data holds a tensor
+  containing a bounding box, confidence, class ID and, when tracking succeeds,
+  a track ID. _process_lane_result() converts the tensor to a Python list and
+  checks whether boxes.is_track is true, because tracked and untracked row
+  layouts differ.
+
+  Tracked row:   [x1, y1, x2, y2, track_id, confidence, class_id]
+  Untracked row: [x1, y1, x2, y2, confidence, class_id]
+
+For each accepted row, _process_lane_result():
+  * gets the source class name from self.model.names[class_id]
+  * applies _passes_confidence(); ambulance has its dedicated threshold
+  * updates current per-class and per-feed counts
+  * stores feed_offset + track_id in unique_tracks, if a tracker ID exists
+  * draws the box and label on the OpenCV frame
+  * remembers the ambulance box centre x-coordinate for motion direction.
+
+Why feed_offset + track_id is used
+  Track IDs are unique only inside one tracking sequence. Feed 1 and Feed 2
+  may both have ID 12. The code uses lane_number * 100,000 + ID, so those two
+  vehicles are not mistakenly treated as the same cumulative vehicle.
+
+
+4. DetectionStats -- the data contract between engine and screen
+-----------------------------------------------------------------
+DetectionStats is a deliberately simple object updated by the worker and read
+by the GUI. It is the shared answer to: "what should the user see now?"
+
+Field                           Meaning
+------------------------------  ----------------------------------------------
+fps                             moving average of last 30 processed frames
+inference_time_ms               YOLO-reported model inference time
+frame_number / total_frames     position in the video(s)
+current_count                   accepted boxes visible in current frame
+total_detected                  number of unique tracking keys seen this run
+class_counts_current            active boxes grouped by display class
+class_counts_total              unique tracked objects grouped by class
+lane_vehicle_counts             current accepted boxes per video feed
+ambulance_lanes                 feeds confirmed as emergency feeds
+ambulance_directions            horizontal screen direction hints
+signal_lane / signal_advice     recommended green feed and explanation
+green_durations                 suggested seconds per feed
+lane_signal_states              GREEN, RED, YIELD or EMERGENCY per feed
+
+The GUI does not access model internals. It only consumes this data contract,
+which keeps UI rendering mostly separate from detection logic.
+
+
+5. Ambulance logic, step by step
+--------------------------------
+The app does not make a decision on a single ambulance box. It applies basic
+temporal confirmation:
+
+  YOLO labels an accepted box as "ambulance"
+     -> that feed is included in ambulance_lanes for this processed frame
+     -> _ambulance_lane_streaks[feed] increases by one
+     -> a missing ambulance resets that feed's streak because a new streak map
+        is built on every processed frame
+     -> a feed enters confirmed_amb_lanes only at streak >= 3
+     -> a newly confirmed feed can start a non-blocking Windows beep
+     -> it receives EMERGENCY state; other feeds receive YIELD
+     -> the GUI EmergencyBanner becomes visible and flashes.
+
+Direction calculation
+  AmbulanceDirectionTracker stores the latest x-centres in a bounded deque.
+  After at least four values, direction() compares the average of the first
+  half with the latter half. A shift greater than +10 pixels means "right";
+  less than -10 means "left". Otherwise it is "unknown".
+
+Why this algorithm was chosen
+  It is intentionally lightweight and understandable. A short moving-history
+  average is less jumpy than using just two frames, costs almost nothing, and
+  needs no extra ML model. Its limitation is equally important: camera motion,
+  turning roads, perspective, or two ambulances can make screen-left/right an
+  unreliable real-world direction estimate.
+
+
+6. Traffic recommendation logic, with example
+-----------------------------------------------
+compute_green_duration(lane_counts) uses:
+
+  duration = minimum + round((count / all_counts) * (maximum - minimum))
+  duration is then clamped to [8, 60] seconds.
+
+Example for 4 feeds with counts {1: 5, 2: 15, 3: 0, 4: 10}:
+  total = 30, span = 60 - 8 = 52
+  Lane 1 -> 8 + round(5/30 * 52)  = 17 seconds
+  Lane 2 -> 8 + round(15/30 * 52) = 34 seconds
+  Lane 3 -> 8 + round(0/30 * 52)  = 8 seconds
+  Lane 4 -> 8 + round(10/30 * 52) = 25 seconds
+  Recommended GREEN = Lane 2 because it has the largest current count.
+
+traffic_signal_advice() overrides this normal rule if an ambulance is
+confirmed. It chooses the lowest-numbered confirmed ambulance feed and tells
+the other feeds to yield. build_lane_signal_states() turns that decision into
+the explicit per-feed labels that the UI draws.
+
+Why this algorithm was chosen
+  It is explainable: a viewer can immediately connect more visible vehicles to
+more proposed green time. It avoids a black-box traffic policy and needs no
+historical traffic dataset. It is not a realistic deployed controller because
+it lacks queue length, waiting time, road geometry, pedestrian phases, safety
+interlocks, and calibrated lane occupancy.
+
+
+7. Why the technical choices fit this project
+---------------------------------------------
+Choice                           Benefit                             Trade-off
+------------------------------  ----------------------------------  -----------------------------
+YOLOv8m detector                 Good accuracy/speed balance         Needs GPU for best FPS
+YOLO tracking                    Avoids naive frame-by-frame totals  IDs can switch or disappear
+Hardware-aware input size       Balances small-object detail/FPS     Lower sizes miss tiny objects
+30% default confidence           Captures weak/distant detections    More false positives possible
+60% fixed ambulance threshold    Reduces false emergency alerts     Can miss weak ambulance boxes
+3-frame confirmation             Removes single-frame alerts         Adds a short response delay
+CUDA/OpenVINO/DirectML/CPU       Runs on more Windows computers      Speed varies by hardware
+Background worker thread         Responsive GUI                      Requires safe handoff of data
+Latest-frame-only display        No delayed visual backlog           Drops intermediate display frames
+Output writer threads            Disk encoding does not stall ML     More thread/queue complexity
+Portable validation preparation  EXE can evaluate without training set Extra disk/time during evaluation
+
+
+8. GUI-to-engine connection diagram
+-----------------------------------
+  gui.py / AppGUI                         detector.py / VehicleDetector
+  ----------------                        ---------------------------------
+  Start button -------------------------> start(paths, save_output)
+  Pause button -------------------------> pause()
+  Resume button ------------------------> resume()
+  Stop button --------------------------> stop()
+  grayscale checkbox -------------------> grayscale_mode Boolean
+  lane mode selector -------------------> set_lane_count() + source slots
+  device control -----------------------> load_model(new device)
+                                          |
+                                          | event_queue: state/stats/error
+  _poll() <------------------------------+
+  _apply_stats(stats) <------------------ stats object
+  _redraw() <---------------------------- latest RGB frame under lock
+
+This direction matters: the worker never directly changes Tkinter widgets.
+Instead it publishes data and events; the main GUI thread consumes them.
+
+
+9. Evaluation code flow
+-----------------------
+Normal real-time detection answers "what is happening in this video?"
+Evaluation answers "how accurate is the trained model against labelled ground
+truth?" These are intentionally separate systems.
+
+  AppGUI evaluation dialog
+       -> starts an evaluation worker thread
+       -> evaluator.run_standard_evaluation(model_path, yaml_path, ...)
+       -> _parse_yaml_data() reads the YOLO data manifest
+       -> prepare_validation_dataset() copies the validation image/label split
+          and converts HEIC/HEIF images to JPEG when required
+       -> _write_absolute_yaml() makes paths unambiguous for Ultralytics
+       -> _load_yolo_model() opens the active MODEL_PATH on CUDA/CPU
+       -> model.val(..., plots=True) compares predictions with label files
+       -> _extract_metrics() reads precision, recall, mAP and per-class data
+       -> saves metrics.txt, metrics.json and Ultralytics plot images.
+
+Why prepare a temporary validation dataset?
+  Ultralytics expects common image types; HEIC can be reported corrupt on some
+  installations. The preparation step converts it to JPEG and copies matching
+  YOLO labels, creating a predictable evaluation input. Absolute paths prevent
+  a common YAML-relative-path problem when code changes its working directory.
+
+Important distinction
+  run_standard_evaluation() evaluates the original validation data. The older
+  run_evaluation() function is the grayscale robustness evaluation path; it
+  deliberately transforms images first. Do not use grayscale metrics as the
+  normal model performance claim.
+
+
+10. Suggested reading order for a new team member
+--------------------------------------------------
+  1. This document's Runtime Pipeline and Traffic Recommendation sections.
+  2. config.py -- identify all adjustable model/signal choices.
+  3. main.py -- understand application startup.
+  4. gui.py: AppGUI.start_detection(), _poll(), _apply_stats(), _redraw().
+  5. detector.py: DetectionStats, start(), _process_lane_result(), then
+     _run_inference_loop() from top to bottom.
+  6. traffic_logic.py -- easy, pure functions worth practising on paper.
+  7. evaluator.py and evaluation_dataset.py -- understand measured accuracy.
+  8. robustness_eval/README.md -- only after understanding the normal path.
+
+Practical exercise for team learning
+  Put breakpoints or temporary logs at AppGUI.start_detection(),
+VehicleDetector.start(), the model.track() call, _process_lane_result(),
+traffic_signal_advice(), and AppGUI._apply_stats(). Run a very short video and
+watch the values move through the pipeline. This is the fastest way to connect
+the code with what appears on screen.
+
+
+ 11. Terms you should use accurately in a report or viva
+--------------------------------------------------------
+  Detection: locating and classifying an object in one frame.
+  Tracking: matching a detected object across successive frames with an ID.
+  Confidence: model score for a predicted class/box; it is not a guarantee.
+  IoU: overlap ratio between two bounding boxes; used in detection evaluation.
+  mAP: average precision across classes, usually the standard detector metric.
+  Inference: running an already trained model to make a prediction.
+  Validation set: labelled data reserved to measure generalisation, not train.
+  Batched inference: multiple frames entered in a single model call; here it
+    improves efficiency for independent camera feeds.
+  Decision support: provides a human-readable recommendation; the human/system
+    remains responsible for the action.
+
+
+IMPLEMENTATION UPDATE -- 2026-08-11
+====================================
+The following improvements listed earlier in this guide have now been applied
+without changing the overall project structure:
+
+  * README.md now correctly states that 1/2/4 lane mode means independent video
+    feeds processed as a batch, and it includes a clear non-operational safety
+    disclaimer.
+  * Processed videos now include a run timestamp down to microseconds, so a new
+    run does not overwrite an earlier output with the same source filename.
+  * The detector creates one reusable frame-reader thread pool per run instead
+    of creating a new pool for every processed frame.
+  * Progress uses the raw number of frames read, so it remains correct when
+    frame skipping is enabled.
+  * ADAPTIVE_FPS_TARGET now gently adjusts the skip interval between the fixed
+    configured interval and eight; SIGNAL_HOLD_MIN_FRAMES now stabilises normal
+    signal changes. Emergency priority still overrides immediately.
+  * MODEL_CARD.md records known model architecture, classes, dataset split
+    counts, usage limits, and the remaining training-provenance fields that
+    must be filled from the original training run.
+  * requirements.txt contains hardware-independent packages; the separate
+    requirements-cpu.txt and requirements-cuda.txt files pin the tested Torch
+    and torchvision pair. .gitignore excludes virtual environments and
+    generated/large artefacts.
+  * tests/ now includes automated checks for traffic decision logic and
+    portable validation dataset preparation.
+
+Before submission, run the standard evaluation in the application and copy the
+resulting real precision, recall, mAP, F1, per-class table, and confusion matrix
+into MODEL_CARD.md and the final report. Those numbers must come from the exact
+weights and held-out dataset being submitted.
+
+
+IMPLEMENTATION UPDATE -- 2026-08-22
+====================================
+The following system optimizations, hardware acceleration modules, and UI/UX
+enhancements have been fully integrated and verified:
+
+  1. Portability & requirements.txt:
+     - Separated hardware-independent packages from the matched Torch runtime:
+       requirements-cpu.txt is used for CPU/iGPU PCs and requirements-cuda.txt
+       for NVIDIA PCs. setup_environment.py selects the correct file.
+     - The common requirements retain OpenVINO and DirectML/ONNX support for
+       Intel and other supported Windows GPUs.
+
+  2. Camera Stream & Performance Optimizations:
+     - Configured DirectShow (cv2.CAP_DSHOW) on Windows for instant camera scanning.
+     - Requests MJPG when supported, plus a single-frame buffer
+       (CAP_PROP_BUFFERSIZE = 1), to reduce USB bandwidth and stale-frame lag.
+     - Multi-Camera Feed Support: Enabled single or comma-separated camera indices
+       (e.g., 0 for 1-lane, 0, 1 for 2-lane, 0, 1, 2, 3 for 4-lane modes).
+
+  3. Intel & AMD iGPU Module Enhancements:
+     - Added single-frame loop protection for Intel OpenVINO and AMD DirectML
+       ONNX models when processing multi-lane feeds, preventing fixed-batch shape
+       mismatches.
+     - Preserved automatic, graceful fallback to CPU if GPU acceleration fails.
+
+  4. Detection Accuracy & False Positive Filtering:
+     - Uses DEFAULT_CONFIDENCE 0.30 for normal vehicles and a fixed
+       AMBULANCE_CONFIDENCE 0.60 exception. The normal SENSITIVITY slider
+       filters video and live-camera detections; it does not lower ambulance.
+     - Added a live SENSITIVITY (CONFIDENCE) slider (15% to 85%) in the GUI sidebar
+       that dynamically filters detections on every frame without restarting.
+
+  5. UI & UX Enhancements:
+     - Added live Traffic Congestion Density Meter with status badges (Low 🟢,
+       Moderate 🟡, Heavy 🟠, CRITICAL CONGESTION 🔴) and a dynamic colored progress bar.
+     - Formatted per-lane Signal Timer rows with explicit traffic light icons
+       (🟢 GREEN, 🔴 RED, 🟡 YIELD, 🚨 CLEAR).
+     - Added keyboard shortcuts: Space (Pause/Resume toggle), Ctrl+O (Browse file),
+       Esc (Exit Fullscreen).
+     - Added mode-aware source hierarchy: one shared source area for one lane,
+       individual Browse and YT Detect controls for 2/4 lanes, and a CCTV
+       Camera entry point beside the local Camera control.
+
+  6. System Stability & Fail-Safe Cleanup:
+     - Drained leftover event queue items on start to prevent session pollution.
+     - Enforced fail-safe thread pool shutdown and video capture releases (cap.release()).
+     - Wrapped Windows console logging with UTF-8 stream decoding to prevent
+       UnicodeEncodeError crashes on Windows command prompt.
+
+
+IMPLEMENTATION UPDATE -- 2026-08-27
+====================================
+The current runtime and delivery details are:
+
+  * `config.MODEL_PATH` prefers `weights/merged_v8m_from_s.pt`, then checks the
+    other documented v8m fallback locations. The model must expose the same
+    11 class IDs expected by config.py.
+  * The confidence slider is not camera-only. It is stored on the shared
+    VehicleDetector instance and applied to normal detections in every video,
+    YouTube, and live-camera frame. Ambulance is the exception and remains at
+    the fixed 60% threshold; 30--40% is a practical normal-vehicle range.
+  * NVIDIA batching is selected from total and currently free VRAM. A GTX
+    1650-class 4 GB card uses two 640px images per multi-feed CUDA call; cards
+    with very little VRAM or little free memory fall back to one. Larger cards
+    can batch up to four feeds. Single-feed profiles retain more input detail.
+  * CPU profiles choose Torch thread count, input size, and preview size from
+    logical cores and physical RAM. Intel OpenVINO and Windows DirectML use
+    fixed-shape accelerator graphs and safe one-image chunks, with CPU fallback
+    if provider loading fails.
+  * The candidate threshold is the lower of the selected normal confidence and
+    the fixed ambulance threshold. Final normal filtering follows the slider;
+    final ambulance filtering always requires 60%.
+  * Windows camera capture uses DirectShow when available, requests MJPG and
+    1280x720/30 FPS, and asks for a one-frame buffer. Live reads discard a small
+    stale backlog so the display favors the current scene over old frames.
+  * A single-feed run now reads directly and passes its ndarray directly to
+    Ultralytics, avoiding two small per-frame wrapper/scheduling costs. Multi-
+    feed capture keeps the reusable reader pool.
+  * The GUI now receives the immutable newest RGB frame by reference instead of
+    copying a full-resolution frame on every redraw. Published frames are never
+    mutated after hand-off.
+  * OpenCV's native optimized paths are explicitly enabled for conversion,
+    resizing, drawing, and video I/O. These changes do not alter thresholds,
+    input profiles, source resolution, or frame coverage.
+  * Standard evaluation currently writes metrics and plots to
+    `evaluation_results/`; grayscale evaluation is a separate robustness
+    experiment and must not replace the standard result in a report.
+  * The three temporary inspection artifacts at the project root were removed;
+    no runtime dependency was removed. The remaining scratch and robustness
+    files are development/research tools and are excluded from the EXE build.
